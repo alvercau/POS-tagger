@@ -14,7 +14,7 @@ MINUS_INFINITY_SENTENCE_LOG_PROB = -1000
 # training_corpus: is a list of the sentences. Each sentence is a string with tokens separated by spaces, ending in a
 # newline character.
 # This function outputs three python dictionaries, where the keys are tuples expressing the ngram and the value is the
-# log probability of that ngram
+# log probability (base 2) of that ngram
 # it is faster to loop over short lists than over very long lists, because short lists take up less memory
 
 def calc_probabilities(training_corpus):
@@ -24,9 +24,9 @@ def calc_probabilities(training_corpus):
     for sentence in training_corpus:
         # Tokenize a string to split off punctuation other than periods
         #tokens1 = nltk.word_tokenize(sentence.strip()) + [STOP_SYMBOL]
-        tokens1 = sentence.strip().split() + [STOP_SYMBOL]
-        tokens2 = [START_SYMBOL] + tokens1
-        tokens3 = [START_SYMBOL] + tokens2
+        tokens1 = sentence.strip().split()
+        tokens2 = [START_SYMBOL] + tokens1 + [STOP_SYMBOL]
+        tokens3 = [START_SYMBOL] + tokens2 + [STOP_SYMBOL]
         #print tokens1
 
         #count unigrams:
@@ -45,7 +45,7 @@ def calc_probabilities(training_corpus):
     # in order to make the script faster, use dict.iteritems instead of looping over the dictionary.
     # the .iteritems creates a generator object, so instead of heaving the whole dictionary in memory (slow), it just
     # has one item at the time.
-    # key in unigram_p has to be a tuple, because of the code in q1_output. if it's ot a tuple, it will only put the
+    # key in unigram_p has to be a tuple, because of the code in q1_output. if it's not a tuple, it will only put the
     # first letter of the word in the output file
     total = sum(unigrams_c.values())
     # unigram_p = {k: math.log(unigrams_c[k]/float(total), 2) for k in unigrams_c}
@@ -103,19 +103,19 @@ def q1_output(unigrams, bigrams, trigrams, filename):
 def score(ngram_p, n, corpus):
     scores = []
     for sentence in corpus:
-        tokens = sentence.strip().split() + [STOP_SYMBOL]
+        tokens = sentence.strip().split()
         score = 0
         if n == 1:
             ngrams = [(token,) for token in tokens]
         elif n == 2:
-            ngrams = nltk.bigrams([START_SYMBOL]+ tokens)
+            ngrams = nltk.bigrams([START_SYMBOL]+ tokens + [STOP_SYMBOL])
         elif n == 3:
-            ngrams = nltk.trigrams([START_SYMBOL, START_SYMBOL]+tokens)
+            ngrams = nltk.trigrams([START_SYMBOL, START_SYMBOL]+tokens + [STOP_SYMBOL, STOP_SYMBOL])
         else:
             print 'Making an n-gram model with n>3 is useless'
             break
         # the score of a sentence is calculated by product of probabilities, not by sum. However, if we have log
-        # probabilities, we do sum them. This is basic algebra.
+        # probabilities, we do sum them. This is algebra.
         # Usually one stores not the actual probabilities but rather their logarithm. The reason is that adding numbers
         # is faster than multiplying them. As an added benefit, you don't have to worry about the dynamic range of the
         # floating point data type you use (the actual probability could be rather close to 0 and could cause underflow,
@@ -151,25 +151,20 @@ def linearscore(unigrams, bigrams, trigrams, corpus):
     l = 1.0/3
     scores = []
     for sentence in corpus:
-        tokens = [START_SYMBOL, START_SYMBOL]+sentence.strip().split() + [STOP_SYMBOL]
+        tokens = [START_SYMBOL, START_SYMBOL]+sentence.strip().split() + [STOP_SYMBOL] + [STOP_SYMBOL]
         trigram_sentence = nltk.trigrams(tokens)
         linear_score = 0
         for trigram in trigram_sentence:
-            try:
+            if trigram in trigrams and trigram[0:2] in bigrams and trigram[2] in unigrams:
                 p3 = trigrams[trigram]
-            except KeyError:
-                p3 = MINUS_INFINITY_SENTENCE_LOG_PROB
-            try:
                 p2 = bigrams[trigram[0:2]]
-            except KeyError:
-                p2 = MINUS_INFINITY_SENTENCE_LOG_PROB
-            try:
                 p1 = unigrams[trigram[2]]
-            except KeyError:
-                p1 = MINUS_INFINITY_SENTENCE_LOG_PROB
-            # I stole the formula below, I do not know logarithms to know how to change the formula above. Also no idea
-            # if the formula is right.
-            linear_score += math.log(l * (2 ** p3) + l * (2 ** p2) + l * (2 ** p1), 2)
+                # I stole the formula below, I do not know logarithms to know how to change the formula above. Also no idea
+                # if the formula is right.
+                linear_score += math.log(l * (2 ** p3) + l * (2 ** p2) + l * (2 ** p1), 2)
+            else:
+                linear_score = MINUS_INFINITY_SENTENCE_LOG_PROB
+                break
         scores.append(linear_score)
     return scores
 
